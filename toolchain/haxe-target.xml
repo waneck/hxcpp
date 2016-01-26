@@ -36,6 +36,7 @@
   <depend name="${HXCPP}/include/hx/CFFILoader.h"/>
   <depend name="${HXCPP}/include/hx/StdLibs.h"/>
   <depend name="${HXCPP}/include/hx/OS.h"/>
+  <depend name="${HXCPP}/include/hx/Unordered.h"/>
   <depend name="${HXCPP}/include/cpp/Pointer.h"/>
   <depend name="${HXCPP}/include/hx/Scriptable.h"/>
   <section unless="HXCPP_LINK_NO_TOOL_DEPENDS" >
@@ -158,7 +159,7 @@
 
 <set name="HAXE_OUTPUT_FILE" value="${LIBPREFIX}${HAXE_OUTPUT_PART}${DBG}" unless="HAXE_OUTPUT_FILE" />
 
-<set name="magiclibs" value="1" if="MSVC18+" />
+<!-- <set name="magiclibs" value="1" if="MSVC18+" /> -->
 
 <section if="magiclibs" >
    <magiclib name="lib/${BINDIR}/libstd${LIBEXTRA}${LIBEXT}" replace="project/libs/std/Build.xml" />
@@ -173,6 +174,8 @@
   <options name="Options.txt"/>
   <ext value="${LIBEXTRA}.a" if="iphoneos" unless="dll_import" />
   <ext value="${LIBEXTRA}.a" if="iphonesim" unless="dll_import" />
+  <ext value="${LIBEXTRA}.a" if="appletvos" unless="dll_import" />
+  <ext value="${LIBEXTRA}.a" if="appletvsim" unless="dll_import" />
 
   <section if="android">
      <ext value="${LIBEXTRA}.so" />

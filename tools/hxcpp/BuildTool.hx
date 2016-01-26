@@ -742,7 +742,7 @@ class BuildTool
                   target.mFlags.push( substitute(el.att.name) );
                   target.mFlags.push( substitute(el.att.value) );
                case "dir" : target.mDirs.push( substitute(el.att.name) );
-               case "outdir" : PathManager.combine( mCurrentIncludeFile, target.mOutputDir = substitute(el.att.name)+"/");
+               case "outdir" : target.mOutputDir = substitute(el.att.name)+"/";
                case "ext" : target.setExt( (substitute(el.att.value)) );
                case "builddir" : target.mBuildDir = substitute(el.att.name);
                case "files" :
@@ -1009,8 +1009,12 @@ class BuildTool
             }
          }
 
+         #if (haxe_ver < 3.3)
+         // avoid issue of path with spaces
+         // https://github.com/HaxeFoundation/haxe/issues/3603
          if (isWindows)
             exe = '"$exe"';
+         #end
 
          Sys.exit( Sys.command( exe, args ) );
       }
@@ -1176,6 +1180,14 @@ class BuildTool
          defines.set("iphone", "iphone");
       }
 
+      if (defines.exists("tvos"))
+      {
+         if (defines.exists("simulator"))
+            defines.set("appletvsim", "appletvsim");
+         else if (!defines.exists ("appletvsim"))
+            defines.set("appletvos", "appletvos");
+         defines.set("appletv", "appletv");
+      }
  
      
 
@@ -1244,6 +1256,20 @@ class BuildTool
          defines.set("iphone","iphone");
          defines.set("apple","apple");
          defines.set("BINDIR","iPhone");
+      }
+      else if (defines.exists("appletvos"))
+      {
+         defines.set("toolchain","appletvos");
+         defines.set("appletv","appletv");
+         defines.set("apple","apple");
+         defines.set("BINDIR","AppleTV");
+      }
+      else if (defines.exists("appletvsim"))
+      {
+         defines.set("toolchain","appletvsim");
+         defines.set("appletv","appletv");
+         defines.set("apple","apple");
+         defines.set("BINDIR","AppleTV");
       }
       else if (defines.exists("android"))
       {
@@ -1331,7 +1357,7 @@ class BuildTool
             defines.set("BINDIR",m64 ? "Windows64":"Windows");
 
             // Choose between MSVC and MINGW
-            var useMsvc = false;
+            var useMsvc = true;
 
             if (defines.exists("mingw") || defines.exists("HXCPP_MINGW") || defines.exists("minimingw"))
                useMsvc = false;
@@ -1375,9 +1401,19 @@ class BuildTool
       else if ( (new EReg("linux","i")).match(os) )
       {
          set64(defines,m64);
-         defines.set("toolchain","linux");
-         defines.set("linux","linux");
-         defines.set("BINDIR", m64 ? "Linux64":"Linux");
+         // Cross-compile?
+         if(defines.exists("windows"))
+         {
+            defines.set("toolchain","mingw");
+            defines.set("xcompile","1");
+            defines.set("BINDIR", m64 ? "Windows64":"Windows");
+         }
+         else
+         {
+            defines.set("toolchain","linux");
+            defines.set("linux","linux");
+            defines.set("BINDIR", m64 ? "Linux64":"Linux");
+         }
       }
       else if ( (new EReg("mac","i")).match(os) )
       {
@@ -1437,6 +1473,28 @@ class BuildTool
             }
             if (best!="")
                defines.set("IPHONE_VER",best);
+         }
+      }
+
+      if (defines.exists("appletv") && !defines.exists("TVOS_VER"))
+      {
+         var dev_path = defines.get("DEVELOPER_DIR") + "/Platforms/AppleTVOS.platform/Developer/SDKs/";
+         if (FileSystem.exists(dev_path))
+         {
+            var best="";
+            var files = FileSystem.readDirectory(dev_path);
+            var extract_version = ~/^AppleTVOS(.*).sdk$/;
+            for(file in files)
+            {
+               if (extract_version.match(file))
+               {
+                  var ver = extract_version.matched(1);
+                  if (Std.parseFloat (ver)>Std.parseFloat (best))
+                     best = ver;
+               }
+            }
+            if (best!="")
+               defines.set("TVOS_VER",best);
          }
       }
       

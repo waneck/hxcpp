@@ -30,6 +30,7 @@
 #if (HXCPP_ANDROID_PLATFORM>=21)
 // Nice one, google, no one was using that.
 #define __ATOMIC_INLINE__ static __inline__ __attribute__((always_inline))
+// returns 0=exchange took place, 1=not
 __ATOMIC_INLINE__ int __atomic_cmpxchg(int old, int _new, volatile int *ptr)
    { return __sync_val_compare_and_swap(ptr, old, _new) != old; }
 __ATOMIC_INLINE__ int __atomic_dec(volatile int *ptr) { return __sync_fetch_and_sub (ptr, 1); }
@@ -38,18 +39,19 @@ __ATOMIC_INLINE__ int __atomic_inc(volatile int *ptr) { return __sync_fetch_and_
 #include <sys/atomics.h>
 #endif
 
+// returns 1 if exchange took place
 inline bool HxAtomicExchangeIf(int inTest, int inNewVal,volatile int *ioWhere)
-   { return __atomic_cmpxchg(inTest, inNewVal, ioWhere)==inNewVal; }
+   { return !__atomic_cmpxchg(inTest, inNewVal, ioWhere); }
 // Returns old value naturally
 inline int HxAtomicInc(volatile int *ioWhere)
    { return __atomic_inc(ioWhere); }
 inline int HxAtomicDec(volatile int *ioWhere)
    { return __atomic_dec(ioWhere); }
 
-#elif defined(HX_WINDOWS)
+#elif defined(HX_WINDOWS) && !defined(HX_WINRT) //winrt test
 
 inline bool HxAtomicExchangeIf(int inTest, int inNewVal,volatile int *ioWhere)
-   { return InterlockedCompareExchange((volatile LONG *)ioWhere, inNewVal, inTest)==inNewVal; }
+   { return InterlockedCompareExchange((volatile LONG *)ioWhere, inNewVal, inTest)==inTest; }
 // Make it return old value
 inline int HxAtomicInc(volatile int *ioWhere)
    { return InterlockedIncrement((volatile LONG *)ioWhere)-1; }
@@ -58,7 +60,7 @@ inline int HxAtomicDec(volatile int *ioWhere)
 
 #define HX_HAS_ATOMIC 1
 
-#elif defined(HX_MACOS) || defined(IPHONE)
+#elif defined(HX_MACOS) || defined(IPHONE) || defined(APPLETV)
 #include <libkern/OSAtomic.h>
 
 #define HX_HAS_ATOMIC 1

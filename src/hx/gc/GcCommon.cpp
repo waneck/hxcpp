@@ -84,7 +84,7 @@ void *String::operator new( size_t inSize )
 
 void __hxcpp_collect(bool inMajor)
 {
-	hx::InternalCollect(inMajor,false);
+	hx::InternalCollect(inMajor,inMajor);
 }
 
 
@@ -170,4 +170,8 @@ void  __hxcpp_set_target_free_space_percentage(int inPercentage)
    hx::sgTargetFreeSpacePercentage = inPercentage;
 }
 
+bool __hxcpp_is_const_string(const ::String &inString)
+{
+   return ((unsigned int *)inString.__s)[-1] & HX_GC_CONST_ALLOC_BIT;
+}
 

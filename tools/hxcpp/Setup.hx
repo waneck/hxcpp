@@ -125,7 +125,16 @@ class Setup
             }
          }
 
-         Log.error('Could not guess MINGW_ROOT (tried $guesses) - please set explicitly');
+         if (ioDefines.exists("mingw"))
+         {
+            //when mingw is explicitly indicated but not properly configured, this log will be shown
+            Log.error('Could not guess MINGW_ROOT (tried $guesses) - please set explicitly');          
+         }
+         else
+         {
+            //when both mingw and MSVC is not properly configured, this log will be shown
+            Log.error('Could not setup any C++ compiler, please install or reinstall a valid C++ compiler');
+         }
       }
    }
 
@@ -205,7 +214,7 @@ class Setup
       }
       else if (inWhat=="msvc")
       {
-         setupMSVC(ioDefines, ioDefines.exists("HXCPP_M64"));
+         setupMSVC(ioDefines, ioDefines.exists("HXCPP_M64"), ioDefines.exists("winrt"));
       }
       else if (inWhat=="pdbserver")
       {
@@ -440,7 +449,7 @@ class Setup
       }
    }
 
-   public static function setupMSVC(ioDefines:Hash<String>, in64:Bool)
+   public static function setupMSVC(ioDefines:Hash<String>, in64:Bool, isWinRT:Bool)
    {
       var detectMsvc = !ioDefines.exists("NO_AUTO_MSVC") &&
                        !ioDefines.exists("HXCPP_MSVC_CUSTOM");
@@ -486,6 +495,7 @@ class Setup
       if (detectMsvc)
       {
          var extra = in64 ? "64" : "";
+         extra += isWinRT? "-winrt" : "";
          var xpCompat = false;
          if (ioDefines.exists("HXCPP_WINXP_COMPAT"))
          {

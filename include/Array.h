@@ -10,6 +10,19 @@
 namespace hx
 {
 
+enum ArrayStore
+{
+   arrayNull = 0,
+   arrayEmpty,
+   arrayFixed,
+   arrayBool,
+   arrayInt,
+   arrayFloat,
+   arrayString,
+   arrayObject,
+};
+
+
 template<typename T> struct ReturnNull { typedef T type; };
 template<> struct ReturnNull<int> { typedef Dynamic type; };
 template<> struct ReturnNull<double> { typedef Dynamic type; };
@@ -22,7 +35,19 @@ template<> struct ReturnNull<short> { typedef Dynamic type; };
 template<> struct ReturnNull<unsigned short> { typedef Dynamic type; };
 template<> struct ReturnNull<unsigned int> { typedef Dynamic type; };
 
+
+template<typename T>
+struct ArrayTraits { enum { StoreType = arrayObject }; };
+template<> struct ArrayTraits<int> { enum { StoreType = arrayInt }; };
+template<> struct ArrayTraits<float> { enum { StoreType = arrayFloat}; };
+template<> struct ArrayTraits<double> { enum { StoreType = arrayFloat}; };
+template<> struct ArrayTraits<Dynamic> { enum { StoreType = arrayObject }; };
+template<> struct ArrayTraits<String> { enum { StoreType = arrayString }; };
+
+
+
 }
+
 
 
 namespace hx
@@ -135,6 +160,10 @@ public:
       mAlloc = length;
    }
 
+   
+   virtual hx::ArrayStore getStoreType() const = 0;
+
+
    // Dynamic interface
    Dynamic __Field(const String &inString ,hx::PropertyAccess inCallProp);
    virtual Dynamic __concat(const Dynamic &a0) = 0;
@@ -145,6 +174,7 @@ public:
    virtual Dynamic __pop() = 0;
    virtual Dynamic __push(const Dynamic &a0) = 0;
    virtual Dynamic __remove(const Dynamic &a0) = 0;
+   virtual Dynamic __removeAt(const Dynamic &a0) = 0;
    virtual Dynamic __indexOf(const Dynamic &a0,const Dynamic &a1) = 0;
    virtual Dynamic __lastIndexOf(const Dynamic &a0,const Dynamic &a1) = 0;
    virtual Dynamic __reverse() = 0;
@@ -163,6 +193,7 @@ public:
    virtual Dynamic __blit(const Dynamic &a0,const Dynamic &a1,const Dynamic &a2,const Dynamic &a3) = 0;
    inline Dynamic __zero(const Dynamic &a0,const Dynamic &a1)  { zero(a0,a1); return null(); }
    virtual Dynamic __memcmp(const Dynamic &a0) = 0;
+   virtual void __qsort(Dynamic inCompare) = 0;
 
 
    Dynamic concat_dyn();
@@ -173,6 +204,7 @@ public:
    Dynamic pop_dyn();
    Dynamic push_dyn();
    Dynamic remove_dyn();
+   Dynamic removeAt_dyn();
    Dynamic indexOf_dyn();
    Dynamic lastIndexOf_dyn();
    Dynamic reverse_dyn();
@@ -192,7 +224,17 @@ public:
    Dynamic zero_dyn();
    Dynamic memcmp_dyn();
 
-   void EnsureSize(int inLen) const;
+   void Realloc(int inLen) const;
+
+   inline void EnsureSize(int inLen) const
+   {
+      if (inLen>length)
+      {
+         if (inLen>mAlloc)
+            Realloc(inLen);
+         length = inLen;
+      }
+   }
 
    void RemoveElement(int inIndex);
 
@@ -221,7 +263,7 @@ public:
 
    virtual bool AllocAtomic() const { return false; }
 
-   virtual bool IsByteArray() const = 0;
+   inline bool IsByteArray() const { return GetElementSize()==1; }
 
 
    inline Dynamic __get(int inIndex) const { return __GetItem(inIndex); }
@@ -246,7 +288,7 @@ namespace cpp
    typedef hx::ObjectPtr<ArrayBase_obj> ArrayBase;
 }
 
-
+#include "cpp/VirtualArray.h"
 
 // --- Array_obj ------------------------------------------------------------------
 //
@@ -286,14 +328,6 @@ template<> inline unsigned char *NewNull<unsigned char>() { unsigned char u=0; r
 #include <algorithm>
 
 
-template<typename T>
-struct ArrayTraits { enum { IsByteArray = 0, IsDynamic = 0, IsString = 0  }; };
-template<>
-struct ArrayTraits<unsigned char> { enum { IsByteArray = 1, IsDynamic = 0, IsString = 0  }; };
-template<>
-struct ArrayTraits<Dynamic> { enum { IsByteArray = 0, IsDynamic = 1, IsString = 0  }; };
-template<>
-struct ArrayTraits<String> { enum { IsByteArray = 0, IsDynamic = 0, IsString = 1  }; };
 
 template<typename ELEM_>
 class Array_obj : public hx::ArrayBase
@@ -344,6 +378,15 @@ public:
       return ArrayBase::Memcmp(inOther.GetPtr());
    }
 
+
+   inline void memcpy(int inStart, ELEM_ *inData, int inElements)
+   {
+      EnsureSize(inStart+inElements+1);
+      int s = GetElementSize();
+      ::memcpy(mBase + s*inStart, inData, s*inElements);
+   }
+
+
    inline void blit(int inDestElement,  Array<ELEM_> inSourceArray,
                     int inSourceElement, int inElementCount)
    {
@@ -369,7 +412,9 @@ public:
       {
          ELEM_ *ptr = (ELEM_ *)mBase;
          for(int i=0;i<length;i++)
+         {
             HX_VISIT_MEMBER(ptr[i]);
+         }
       }
    }
    #endif
@@ -428,6 +473,17 @@ public:
       }
       return false;
    }
+
+   bool removeAt( int idx )
+   { 
+      if( idx < 0 ) idx += length; 
+      if (idx>=length || idx<0) return false; 
+
+      ELEM_ e = __get(idx); 
+      RemoveElement(idx); 
+      return true; 
+   }
+
 
    int indexOf(ELEM_ inValue, Dynamic fromIndex = null())
    {
@@ -546,10 +602,11 @@ public:
 
    void sort(Dynamic inSorter)
    {
-      if ( ArrayTraits<ELEM_>::IsDynamic || ArrayTraits<ELEM_>::IsString)
+      if ( hx::ArrayTraits<ELEM_>::StoreType==(int)hx::arrayObject ||
+          hx::ArrayTraits<ELEM_>::StoreType==(int)hx::arrayString)
       {
          // Keep references from being hidden inside sorters buffers
-         safeSort(inSorter, ArrayTraits<ELEM_>::IsString);
+         safeSort(inSorter, hx::ArrayTraits<ELEM_>::StoreType==(int)hx::arrayString);
       }
       else
       {
@@ -563,7 +620,12 @@ public:
    template<typename TO>
    Dynamic iteratorFast() { return new hx::ArrayIterator<ELEM_,TO>(this); }
 
-   virtual bool IsByteArray() const { return ArrayTraits<ELEM_>::IsByteArray; }
+   
+   virtual hx::ArrayStore getStoreType() const
+   {
+      return (hx::ArrayStore) hx::ArrayTraits<ELEM_>::StoreType;
+   }
+
 
    // Dynamic interface
    virtual Dynamic __concat(const Dynamic &a0) { return concat(a0); }
@@ -574,6 +636,7 @@ public:
    virtual Dynamic __pop() { return pop(); }
    virtual Dynamic __push(const Dynamic &a0) { return push(a0);}
    virtual Dynamic __remove(const Dynamic &a0) { return remove(a0); }
+   virtual Dynamic __removeAt(const Dynamic &a0) { return removeAt(a0); }
    virtual Dynamic __indexOf(const Dynamic &a0,const Dynamic &a1) { return indexOf(a0, a1); }
    virtual Dynamic __lastIndexOf(const Dynamic &a0,const Dynamic &a1) { return lastIndexOf(a0, a1); }
    virtual Dynamic __reverse() { reverse(); return null(); }
@@ -587,6 +650,7 @@ public:
    virtual Dynamic __filter(const Dynamic &func) { return filter(func); }
    virtual Dynamic __blit(const Dynamic &a0,const Dynamic &a1,const Dynamic &a2,const Dynamic &a3) { blit(a0,a1,a2,a3); return null(); }
    virtual Dynamic __memcmp(const Dynamic &a0) { return memcmp(a0); }
+   virtual void __qsort(Dynamic inCompare) { this->qsort(inCompare); };
 
 };
 
@@ -653,7 +717,31 @@ public:
       }
    }
 
-   inline void setDynamic( const Dynamic &inRHS )
+   #ifdef HX_VARRAY_DEFINED
+   // From VirtualArray
+   Array( const cpp::VirtualArray &inVArray) { fromVArray(inVArray.mPtr); }
+
+   void fromVArray(cpp::VirtualArray_obj *inVArray)
+   {
+      if (!inVArray || inVArray->store==hx::arrayNull)
+      {
+         mPtr = 0;
+         return;
+      }
+      inVArray->fixType<ELEM_>();
+      // Switch on type?
+      setDynamic(inVArray->base,true);
+   }
+
+   Array &operator=( const cpp::VirtualArray &inRHS )
+   {
+      fromVArray(inRHS.mPtr);
+      return *this;
+   }
+
+   #endif
+
+   inline void setDynamic( const Dynamic &inRHS, bool inIgnoreVirtualArray=false )
    {
       hx::Object *ptr = inRHS.GetPtr(); 
       if (ptr)
@@ -661,13 +749,22 @@ public:
          OBJ_ *arr = dynamic_cast<OBJ_ *>(ptr);
          if (!arr && ptr->__GetClass().mPtr == super::__SGetClass().mPtr )
          {
-            // Non-identical type.
-            // Copy elements one-by-one
-            // Not quite right, but is the best we can do...
-            int n = ptr->__length();
-            *this = Array_obj<ELEM_>::__new(n);
-            for(int i=0;i<n;i++)
-               mPtr->__unsafe_set(i,ptr->__GetItem(i));
+            #ifdef HX_VARRAY_DEFINED
+            cpp::VirtualArray_obj *varray = inIgnoreVirtualArray ? 0 :
+                                            dynamic_cast<cpp::VirtualArray_obj *>(ptr);
+            if (varray)
+               fromVArray(varray);
+            else
+            #endif
+            {
+               // Non-identical type.
+               // Copy elements one-by-one
+               // Not quite right, but is the best we can do...
+               int n = ptr->__length();
+               *this = Array_obj<ELEM_>::__new(n);
+               for(int i=0;i<n;i++)
+                  mPtr->__unsafe_set(i,ptr->__GetItem(i));
+            }
          }
          else
             mPtr = arr;
@@ -747,7 +844,7 @@ template<typename ELEM_>
 Array<ELEM_> Array_obj<ELEM_>::copy( )
 {
    Array_obj *result = new Array_obj((int)length,0);
-   memcpy(result->GetBase(),GetBase(),length*sizeof(ELEM_));
+   ::memcpy(result->GetBase(),GetBase(),length*sizeof(ELEM_));
    return result;
 }
 
@@ -796,7 +893,10 @@ Dynamic Array_obj<ELEM_>::map(Dynamic inFunc)
    return result;
 }
 
-
+// Include again, for functions that required Array definition
+#ifdef HX_VARRAY_DEFINED
+#include "cpp/VirtualArray.h"
+#endif
 
 
 

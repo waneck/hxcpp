@@ -97,8 +97,7 @@ public:
 
    int Compare(const Dynamic &inRHS) const
    {
-      if (mPtr==inRHS.mPtr) return 0;
-      if (mPtr==0) return -1;
+      if (mPtr==0) return inRHS.mPtr==0 ? 0 : -1;
       if (inRHS.mPtr==0) return -1;
       return mPtr->__Compare(inRHS.mPtr->__GetRealObject());
    }
@@ -115,7 +114,9 @@ public:
 
    bool operator == (const Dynamic &inRHS) const
    {
-      if (mPtr==inRHS.mPtr) return true;
+      // Comparing pointers fails in the case on Nan==Nan
+      //if (mPtr==inRHS.mPtr) return true;
+      if (!mPtr && !inRHS.mPtr) return true;
       if (!mPtr || !inRHS.mPtr) return false;
       return mPtr->__Compare(inRHS.mPtr->__GetRealObject())==0;
    }

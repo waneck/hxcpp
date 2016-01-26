@@ -48,6 +48,7 @@ int __sys_prims() { return 0; }
 
 #ifdef HX_WINRT
 #include <hx/Thread.h>
+#include <hx/Tls.h>
 #endif
 
 #ifndef CLK_TCK
@@ -268,7 +269,7 @@ static value sys_is64() {
 	<doc>Run the shell command and return exit code</doc>
 **/
 static value sys_command( value cmd ) {
-   #if defined(HX_WINRT) || defined(EMSCRIPTEN) || defined(EPPC)
+   #if defined(HX_WINRT) || defined(EMSCRIPTEN) || defined(EPPC) || defined(APPLETV)
 	return alloc_int( -1 );
    #else
 	val_check(cmd,string);
@@ -694,7 +695,7 @@ static value sys_exe_path() {
 #endif
 }
 
-#ifndef IPHONE
+#if !defined(IPHONE) && !defined(APPLETV)
 #ifdef NEKO_MAC
 #include <crt_externs.h>
 #	define environ (*_NSGetEnviron())

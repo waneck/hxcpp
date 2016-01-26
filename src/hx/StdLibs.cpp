@@ -266,9 +266,160 @@ double  __time_stamp()
 #endif
 }
 
+#if defined(HX_WINDOWS)
+
+/*
+ISWHITE and ParseCommandLine are based on the implementation of the 
+.NET Core runtime, CoreCLR, which is licensed under the MIT license:
+Copyright (c) Microsoft. All rights reserved.
+See LICENSE file in the CoreCLR project root for full license information.
+
+The original source code of ParseCommandLine can be found in
+https://github.com/dotnet/coreclr/blob/master/src/vm/util.cpp
+*/
+
+#define ISWHITE(x) ((x)==(' ') || (x)==('\t') || (x)==('\n') || (x)==('\r') )
+
+static void ParseCommandLine(LPTSTR psrc, Array<String> &out)
+{
+    unsigned int argcount = 1;       // discovery of arg0 is unconditional, below
+
+    bool    fInQuotes;
+    int     iSlash;
+
+    /* A quoted program name is handled here. The handling is much
+       simpler than for other arguments. Basically, whatever lies
+       between the leading double-quote and next one, or a terminal null
+       character is simply accepted. Fancier handling is not required
+       because the program name must be a legal NTFS/HPFS file name.
+       Note that the double-quote characters are not copied, nor do they
+       contribute to numchars.
+         
+       This "simplification" is necessary for compatibility reasons even
+       though it leads to mishandling of certain cases.  For example,
+       "c:\tests\"test.exe will result in an arg0 of c:\tests\ and an
+       arg1 of test.exe.  In any rational world this is incorrect, but
+       we need to preserve compatibility.
+    */
+
+    LPTSTR pStart = psrc;
+    bool skipQuote = false;
+
+    if (*psrc == '\"')
+    {
+        // scan from just past the first double-quote through the next
+        // double-quote, or up to a null, whichever comes first
+        while ((*(++psrc) != '\"') && (*psrc != '\0'))
+            continue;
+
+        skipQuote = true;
+    }
+    else
+    {
+        /* Not a quoted program name */
+
+        while (!ISWHITE(*psrc) && *psrc != '\0')
+            psrc++;
+    }
+
+    // We have now identified arg0 as pStart (or pStart+1 if we have a leading
+    // quote) through psrc-1 inclusive
+    if (skipQuote)
+        pStart++;
+    String arg0("");
+    while (pStart < psrc)
+    {
+        arg0 += String::fromCharCode(*pStart);
+        pStart++;
+    }
+    // out.Add(arg0); // the command isn't part of Sys.args()
+
+    // if we stopped on a double-quote when arg0 is quoted, skip over it
+    if (skipQuote && *psrc == '\"')
+        psrc++;
+
+    while ( *psrc != '\0')
+    {
+LEADINGWHITE:
+
+        // The outofarg state.
+        while (ISWHITE(*psrc))
+            psrc++;
+
+        if (*psrc == '\0')
+            break;
+        else
+        if (*psrc == '#')
+        {
+            while (*psrc != '\0' && *psrc != '\n')
+                psrc++;     // skip to end of line
+
+            goto LEADINGWHITE;
+        }
+
+        argcount++;
+        fInQuotes = FALSE;
+
+        String arg("");
+
+        while ((!ISWHITE(*psrc) || fInQuotes) && *psrc != '\0')
+        {
+            switch (*psrc)
+            {
+            case '\\':
+                iSlash = 0;
+                while (*psrc == '\\')
+                {
+                    iSlash++;
+                    psrc++;
+                }
+
+                if (*psrc == '\"')
+                {
+                    for ( ; iSlash >= 2; iSlash -= 2)
+                    {
+                        arg += String("\\");
+                    }
+
+                    if (iSlash & 1)
+                    {
+                        arg += String::fromCharCode(*psrc);
+                        psrc++;
+                    }
+                    else
+                    {
+                        fInQuotes = !fInQuotes;
+                        psrc++;
+                    }
+                }
+                else
+                    for ( ; iSlash > 0; iSlash--)
+                    {
+                        arg += String("\\");
+                    }
+
+                break;
+
+            case '\"':
+                fInQuotes = !fInQuotes;
+                psrc++;
+                break;
+
+            default:
+                arg += String::fromCharCode(*psrc);
+                psrc++;
+            }
+        }
+
+        out.Add(arg);
+        arg = String("");
+    }
+}
+#endif
+
 
 #ifdef __APPLE__
- #ifndef IPHONE
+ #if !defined(IPHONE) && !defined(APPLETV)
    extern "C" {
    extern int *_NSGetArgc(void);
    extern char ***_NSGetArgv(void);
@@ -283,34 +434,11 @@ Array<String> __get_args()
    // Do nothing
    #elif defined(HX_WINDOWS)
    LPTSTR str =  GetCommandLine();
-   bool skip_first = true;
-   while(*str != '\0')
-   {
-      bool in_quote = false;
-      LPTSTR end = str;
-      String arg;
-      while(*end!=0)
-      {
-         if (*end=='\0') break;
-         if (!in_quote && *end==' ') break;
-         if (*end=='"')
-            in_quote = !in_quote;
-         else
-            arg += String::fromCharCode(*end);
-         ++end;
-      }
-
-      if (!skip_first)
-         result.Add( arg );
-         skip_first = false;
-
-      while(*end==' ') end++;
-      str = end;
-   }
+   ParseCommandLine(str, result);
    #else
    #ifdef __APPLE__
 
-   #ifndef IPHONE
+   #if !defined(IPHONE) && !defined(APPLETV)
    int argc = *_NSGetArgc();
    char **argv = *_NSGetArgv();
    for(int i=1;i<argc;i++)
@@ -328,16 +456,16 @@ Array<String> __get_args()
    bool real_arg = 0;
    if (cmd)
    {
-      String arg;
+      String arg("");
       buf[0] = '\0';
       while (fread(buf, 1, 1, cmd))
       {
-         if ((unsigned char)buf[0]<32) // line terminator
+         if ((unsigned char)buf[0] == 0) // line terminator
          {
             if (real_arg)
                result->push(arg);
             real_arg = true;
-            arg = String();
+            arg = String("");
          }
          else
             arg += String::fromCharCode(buf[0]);
@@ -354,19 +482,27 @@ Array<String> __get_args()
 
 void __hxcpp_print(Dynamic &inV)
 {
+   #ifdef HX_WINRT
+   WINRT_PRINTF("%s",inV->toString().__s);
+   #else
    #ifdef HX_UTF8_STRINGS
    printf("%s",inV->toString().__s);
    #else
    printf("%S",inV->toString().__s);
    #endif
+   #endif
 }
 
 void __hxcpp_println(Dynamic &inV)
 {
+   #ifdef HX_WINRT
+   WINRT_PRINTF("%s\n",inV->toString().__s);
+   #else
    #ifdef HX_UTF8_STRINGS
    printf("%s\n",inV->toString().__s);
    #else
    printf("%S\n",inV->toString().__s);
+   #endif
    #endif
 }
 

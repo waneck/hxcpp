@@ -4,6 +4,7 @@
 #include <string>
 #include <map>
 #include <vector>
+#include <stdlib.h>
 
 #ifdef ANDROID
 #include <android/log.h>
@@ -50,7 +51,7 @@ void *hxFindSymbol(Module inModule, const char *inSymbol) { return (void *)GetPr
 
 void hxFreeLibrary(Module inModule) { FreeLibrary(inModule); }
 
-#elif (defined (IPHONE) || defined(EMSCRIPTEN) || defined(STATIC_LINK)) && !defined(HXCPP_DLL_IMPORT) && (!defined(HXCPP_DLL_EXPORT) || defined(HXCPP_SCRIPTABLE) )
+#elif (defined (IPHONE) || defined(EMSCRIPTEN) || defined(STATIC_LINK) || defined(APPLETV) ) && !defined(HXCPP_DLL_IMPORT) && (!defined(HXCPP_DLL_EXPORT) || defined(HXCPP_SCRIPTABLE) )
 
 typedef void *Module;
 Module hxLoadLibrary(const String &) { return 0; }
@@ -65,7 +66,7 @@ typedef void *Module;
 Module hxLoadLibrary(String inLib)
 {
    int flags = RTLD_GLOBAL;
-   #if defined(HXCPP_RTLD_LAZY) || defined(IPHONE) || defined(EMSCRIPTEN) || defined(STATIC_LINK)
+   #if defined(HXCPP_RTLD_LAZY) || defined(IPHONE) || defined(EMSCRIPTEN) || defined(STATIC_LINK) || defined(APPLETV)
    flags |= RTLD_LAZY;
    #else
    flags |= RTLD_NOW;
@@ -74,10 +75,17 @@ Module hxLoadLibrary(String inLib)
    Module result = dlopen(inLib.__CStr(), flags);
    if (gLoadDebug)
    {
+#ifdef HX_WINRT
+      if (result)
+         WINRT_LOG("Loaded : %s.\n", inLib.__CStr());
+      else
+         WINRT_LOG("Error loading library: (%s) %s\n", inLib.__CStr(), dlerror());
+#else
       if (result)
          printf("Loaded : %s.\n", inLib.__CStr());
       else
          printf("Error loading library: (%s) %s\n", inLib.__CStr(), dlerror());
+#endif
    }
    return result;
 }
@@ -332,7 +340,13 @@ static bool sgLibPathIsInit = false;
 String __hxcpp_get_bin_dir()
 {
    return
-#ifdef _WIN32
+#if defined(HX_WINRT)
+  #ifdef HXCPP_M64
+    HX_CSTRING("WinRT64");
+  #else
+    HX_CSTRING("WinRT");
+  #endif
+#elif defined(_WIN32)
   #ifdef HXCPP_M64
     HX_CSTRING("Windows64");
   #else
@@ -361,6 +375,10 @@ String __hxcpp_get_bin_dir()
     HX_CSTRING("IPhoneSim");
 #elif defined(IPHONEOS)
     HX_CSTRING("IPhoneOs");
+#elif defined(APPLETVSIM)
+    HX_CSTRING("AppleTVSim");
+#elif defined(APPLETVOS)
+    HX_CSTRING("AppleTVOS");
 #else
   #ifdef HXCPP_M64
     HX_CSTRING("Linux64");
@@ -373,11 +391,15 @@ String __hxcpp_get_bin_dir()
 String __hxcpp_get_dll_extension()
 {
    return
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(HX_WINRT)
     HX_CSTRING(".dll");
 #elif defined(IPHONEOS)
     HX_CSTRING(".ios.dylib");
 #elif defined(IPHONESIM)
+    HX_CSTRING(".sim.dylib");
+#elif defined(APPLETVOS)
+    HX_CSTRING(".tvos.dylib");
+#elif defined(APPLETVSIM)
     HX_CSTRING(".sim.dylib");
 #elif defined(__APPLE__)
     HX_CSTRING(".dylib");
@@ -404,7 +426,7 @@ void __hxcpp_push_dll_path(String inPath)
 
 
 
-#if (defined(IPHONE) || defined(EMSCRIPTEN) || defined(STATIC_LINK)) && !defined(HXCPP_DLL_IMPORT) && (!defined(HXCPP_DLL_EXPORT) || defined(HXCPP_SCRIPTABLE) )
+#if (defined(IPHONE) || defined(EMSCRIPTEN) || defined(STATIC_LINK) || defined(APPLETV) ) && !defined(HXCPP_DLL_IMPORT) && (!defined(HXCPP_DLL_EXPORT) || defined(HXCPP_SCRIPTABLE) )
 
 Dynamic __loadprim(String inLib, String inPrim,int inArgCount)
 {
@@ -461,7 +483,7 @@ int __hxcpp_unload_all_libraries() { return 0; }
 extern "C" void *hx_cffi(const char *inName);
 
 
-#if !defined(ANDROID) && !defined(HX_WINRT) && !defined(IPHONE) && !defined(EMSCRIPTEN) && !defined(STATIC_LINK)
+#if !defined(ANDROID) && !defined(HX_WINRT) && !defined(IPHONE) && !defined(EMSCRIPTEN) && !defined(STATIC_LINK) && !defined(APPLETV)
     #define HXCPP_TRY_HAXELIB
 #endif
 
@@ -479,7 +501,9 @@ void *__hxcpp_get_proc_address(String inLib, String full_name,bool inNdllProc,bo
    String module_name = inLib;
    #endif
 
-   #ifdef IPHONE
+   #if defined(HX_WINRT) && defined(HXCPP_DEBUG_LINK)
+   gLoadDebug = true;   
+   #elif defined(IPHONE) || defined(APPLETV)
    gLoadDebug = true;
    setenv("DYLD_PRINT_APIS","1",true);
 
@@ -490,8 +514,9 @@ void *__hxcpp_get_proc_address(String inLib, String full_name,bool inNdllProc,bo
    if (!sgLibPathIsInit)
    {
       sgLibPathIsInit = true;
-
+      #ifndef HX_WINRT 
       sgLibPath.push_back("./");
+	  #endif
       #ifdef HX_MACOS
       sgLibPath.push_back("@executable_path/");
       #endif
@@ -527,7 +552,9 @@ void *__hxcpp_get_proc_address(String inLib, String full_name,bool inNdllProc,bo
 
    if (!module && gLoadDebug)
    {
-      #ifdef ANDROID
+      #ifdef HX_WINRT
+      WINRT_LOG("Searching for %s...\n", inLib.__s);
+      #elif defined(ANDROID)
        __android_log_print(ANDROID_LOG_INFO, "loader", "Searching for %s...", module_name.__s);
       #else
       printf("Searching for %s...\n", inLib.__s);
@@ -536,16 +563,31 @@ void *__hxcpp_get_proc_address(String inLib, String full_name,bool inNdllProc,bo
 
    String haxelibPath;
 
+#ifdef HX_WINRT
+   for (int e = 0; module == 0 && e<1; e++) //only accept DLL
+#else
    for(int e=0; module==0 && e<3; e++)
+#endif
    {
       String extension = e==0 ? deviceExt : e==1 ? HX_CSTRING(".ndll") : HX_CSTRING("");
 
       for(int path=0;path<sgLibPath.size();path++)
       {
+#if defined(HX_WINRT)
+         if (gLoadDebug)
+		 {
+            WINRT_LOG(" module_name: [%s]  extension: [%s]\n", module_name.__s, extension.__s);
+		 }
+		 String testPath = module_name + extension;
+#else
          String testPath = String( sgLibPath[path].c_str() ) +  module_name + extension;
+#endif
          if (gLoadDebug)
          {
-            #ifndef ANDROID
+            #ifdef HX_WINRT
+            WINRT_LOG(" try %s...\n", testPath.__s);
+
+            #elif !defined(ANDROID)
             printf(" try %s...\n", testPath.__s);
             #else
             __android_log_print(ANDROID_LOG_INFO, "loader", "Try %s", testPath.__s);
@@ -556,7 +598,9 @@ void *__hxcpp_get_proc_address(String inLib, String full_name,bool inNdllProc,bo
          {
             if (gLoadDebug)
             {
-               #ifndef ANDROID
+               #ifdef HX_WINRT
+               WINRT_LOG("Found %s\n", testPath.__s);
+               #elif !defined(ANDROID)
                printf("Found %s\n", testPath.__s);
                #else
                __android_log_print(ANDROID_LOG_INFO, "loader", "Found %s", testPath.__s);

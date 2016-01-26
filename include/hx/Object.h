@@ -6,13 +6,14 @@
 #endif
 
 #ifdef HXCPP_TELEMETRY
-extern void __hxt_gc_new(void* obj, int inSize);
+extern void __hxt_gc_new(void* obj, int inSize, const char *inName);
 #endif
 
 
 // --- Constants -------------------------------------------------------
 
-enum ObjectType
+// These values are returned from the "__GetType" function
+enum hxObjectType
 {
    vtUnknown = -1,
    vtInt = 0xff,
@@ -112,7 +113,7 @@ public:
                                gMarkID;
 
                #ifdef HXCPP_TELEMETRY
-                  __hxt_gc_new(buffer, inSize);
+               __hxt_gc_new(buffer, inSize, inName);
                #endif
                return buffer;
             }
@@ -129,7 +130,7 @@ public:
 
 
       #ifdef HXCPP_TELEMETRY
-         __hxt_gc_new(result, inSize);
+         __hxt_gc_new(result, inSize, inName);
       #endif
       return result;
    }
@@ -191,6 +192,7 @@ public:
    virtual int __length() const { return 0; }
    virtual Dynamic __GetItem(int inIndex) const;
    virtual Dynamic __SetItem(int inIndex,Dynamic inValue);
+
    virtual void __SetSize(int inLen) { }
 
    typedef const Dynamic &D;
@@ -224,6 +226,7 @@ public:
 template<typename OBJ_>
 class ObjectPtr
 {
+protected:
    inline bool SetPtr(OBJ_ *inPtr)
    {
       mPtr = inPtr;
