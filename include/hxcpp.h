@@ -208,10 +208,19 @@ namespace cpp
    #ifdef _WIN32
    typedef __int64 Int64;
    typedef unsigned __int64 UInt64;
+   #ifdef _WIN64
+   typedef signed __int64 IntPtr;
+   typedef unsigned __int64 UIntPtr;
+   #else
+   typedef __W64 signed int IntPtr;
+   typedef __W64 unsigned int UIntPtr;
+   #endif
    // TODO - EMSCRIPTEN?
    #else
    typedef int64_t Int64;
    typedef uint64_t UInt64;
+   typedef intptr_t IntPtr;
+   typedef uintptr_t UIntPtr;
    #endif
    typedef float Float32;
    typedef double Float64;

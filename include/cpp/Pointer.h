@@ -162,6 +162,8 @@ public:
    inline Dynamic operator=( null &inValue ) { ptr=0; return inValue; }
    inline AutoCast reinterpret() { return AutoCast(ptr); }
    inline RawAutoCast rawCast() { return RawAutoCast(ptr); }
+   inline IntPtr toIntPtr() { return (IntPtr) ptr; }
+   inline UIntPtr toUIntPtr() { return (UIntPtr) ptr; }
 
    inline bool operator==( const null &inValue ) const { return ptr==0; }
    inline bool operator!=( const null &inValue ) const { return ptr!=0; }
@@ -232,6 +234,8 @@ public:
    inline Dynamic operator=( null &inValue ) { ptr=0; return inValue; }
    inline AutoCast reinterpret() { return AutoCast(ptr); }
    inline RawAutoCast rawCast() { return RawAutoCast(ptr); }
+   inline IntPtr toIntPtr() { return (IntPtr) ptr; }
+   inline UIntPtr toUIntPtr() { return (UIntPtr) ptr; }
 
    inline bool operator==( const null &inValue ) const { return ptr==0; }
    inline bool operator!=( const null &inValue ) const { return ptr!=0; }
@@ -434,6 +438,9 @@ public:
    template<typename T>
 	inline static Pointer<T> fromRaw(const T *value)  { return Pointer<T>(value); }
 
+   inline static Pointer<void> fromIntPtr(IntPtr value) { return Pointer<void>( (void *) value ); }
+
+   inline static Pointer<void> fromUIntPtr(UIntPtr value) { return Pointer<void>( (void *) value ); }
 
    inline static AutoCast fromHandle(Dynamic inValue, String inKind)
    {
