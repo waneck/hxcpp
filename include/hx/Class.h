@@ -122,6 +122,12 @@ public:
    void VisitStatics(hx::VisitContext *__inCtx);
    #endif
 
+   #ifdef HXCPP_SCRIPTABLE_REPLACE
+   virtual bool IsScript() {
+     return false;
+   }
+   #endif
+
    static ::Array< ::String > dupFunctions(String inStatics[]);
 
    // the "Class class"
@@ -186,6 +192,10 @@ public:
    #ifdef HXCPP_SCRIPTABLE
    const hx::StorageInfo*    mMemberStorageInfo;
    const hx::StaticInfo*    mStaticStorageInfo;
+   #endif
+
+   #ifdef HXCPP_SCRIPTABLE_REPLACE
+   hx::Class *        mReference;
    #endif
 };
 

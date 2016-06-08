@@ -116,6 +116,18 @@ void Class_obj::registerScriptable(bool inOverwrite)
 {
    if (!inOverwrite && sClassMap->find(mName)!=sClassMap->end())
       return;
+
+#ifdef HXCPP_SCRIPTABLE_REPLACE
+   ClassMap::const_iterator i = sClassMap->find(mName);
+   if (i!=sClassMap->end())
+   {
+     if (i->second->mReference != 0) 
+     {
+        *i->second->mReference = this;
+        this->mReference = i->second->mReference;
+     }
+   }
+#endif
    (*sClassMap)[ mName ] = this;
 }
 

@@ -25,4 +25,6 @@
  <flag value='-DHXCPP_API_LEVEL=0' unless="hxcpp_api_level"  tag="haxe"/>
  <flag value='-DHXCPP_OBJC' if="objc"  tag="haxe"/>
  <flag value='-DHXCPP_GC_DEBUG_LEVEL=${HXCPP_GC_DEBUG_LEVEL}' if="HXCPP_GC_DEBUG_LEVEL" tag="gc" />
+ <!-- replace statically compiled classes with cppia versions if this flag is defined in Haxe code -->
+ <flag value="-DHXCPP_SCRIPTABLE_REPLACE" if="scriptableReplace"/>
 </xml>

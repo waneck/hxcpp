@@ -1635,6 +1635,9 @@ struct CppiaClassInfo
 
        bool isNew = //(resolved == null() || !IsCppiaClass(resolved) ) &&
                    (!HaxeNativeClass::findClass(name) && !HaxeNativeInterface::findInterface(name) );
+#ifdef HXCPP_SCRIPTABLE_REPLACE
+       isNew = true;
+#endif
 
        if (isNew && isEnum)
        {
@@ -2584,6 +2587,10 @@ public:
       }
 
       bool overwrite = false;
+#ifdef HXCPP_SCRIPTABLE_REPLACE
+      // always overwrite when compiled with -D scriptableReplace
+      overwrite = true;
+#endif
       hx::Class old = hx::Class_obj::Resolve(inName);
       // Overwrite cppia classes
       if (old.mPtr && dynamic_cast<CppiaClass *>( old.mPtr ) )
@@ -2600,6 +2607,12 @@ public:
       Expressions none;
       return info->createInstance(CppiaCtx::getCurrent(),none,false);
    } 
+
+#ifdef HXCPP_SCRIPTABLE_REPLACE
+   bool IsScript() {
+      return true;
+   }
+#endif
 
    Dynamic ConstructArgs(hx::DynamicArray inArgs)
    {
